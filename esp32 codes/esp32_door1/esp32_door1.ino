@@ -22,6 +22,7 @@ int door = 18; //GPIO18 pin connected to IN2 for door relay
 bool pirstate1;
 bool pirstate2;
 bool pirstate3;
+bool doorstate = 1;
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -60,61 +61,102 @@ void setup() {
     ,  2048  // Stack size
     ,  NULL  // When no parameter is used, simply pass NULL
     ,  2  // Priority
-    ,  &analog_read_task_handle // With task handle we will be able to manipulate with this task.
+    ,  NULL // With task handle we will be able to manipulate with this task.
     ,  ARDUINO_RUNNING_CORE // Core on which the task will run
     );
 
       xTaskCreatePinnedToCore(
     TaskHCIControl
-    ,  "Analog Read"
+    ,  "HCI Control"
     ,  2048  // Stack size
     ,  NULL  // When no parameter is used, simply pass NULL
     ,  1  // Priority
-    ,  &analog_read_task_handle // With task handle we will be able to manipulate with this task.
+    ,  NULL // With task handle we will be able to manipulate with this task.
     ,  ARDUINO_RUNNING_CORE // Core on which the task will run
     );
 }
 
 void loop() {
-  pirstate1 = digitalRead(pir1);   // check for motion
-  pirstate2 = digitalRead(pir2);   
-  pirstate3 = digitalRead(pir3);
-
   if(!client.connected()) reconnect();
   client.loop();    
+}
 
-/*  if (pirstate1 == HIGH && pirstate2 == HIGH && pirstate3 == HIGH) {
-    Serial.println("Motion detected!");
-    Serial.println(pirstate1);
-    Serial.println(pirstate2);
-    Serial.println(pirstate3);
-    delay(1500);
-    
-    pirstate1 = digitalRead(pir1);   // check for motion
-    pirstate2 = digitalRead(pir2);   
-    pirstate3 = digitalRead(pir3);
+void TaskSensorControl( void *pvParameters )  // This is a task.
+{
+  (void) pvParameters;
   
-    Serial.print("Hi");
-    Serial.println(pirstate1);
-    Serial.print("Hi");
-    Serial.println(pirstate2);
-    Serial.print("Hi");
-    Serial.println(pirstate3);
+/*
+  AnalogReadSerial
+  Reads an analog input on pin A3, prints the result to the serial monitor.
+  Graphical representation is available using serial plotter (Tools > Serial Plotter menu)
+  Attach the center pin of a potentiometer to pin A3, and the outside pins to +5V and ground.
+
+  This example code is in the public domain.
+*/
+
+  for (;;)
+  {
+     pirstate1 = digitalRead(pir1);   // check for motion
+     pirstate2 = digitalRead(pir2);   
+     pirstate3 = digitalRead(pir3);
+     if (pirstate1 == HIGH && pirstate2 == HIGH && pirstate3 == HIGH) {
+      Serial.println("Motion detected!");
+      Serial.println(pirstate1);
+      Serial.println(pirstate2);
+      Serial.println(pirstate3);
+      vTaskDelay(100);  // one tick delay (15ms) in between reads for stability
       
-    if (pirstate1 == HIGH && pirstate2 == HIGH && pirstate3 == HIGH) {
-    Serial.println("Open door!");
-    digitalWrite(door, LOW);
-    publishMessage(pirsensor1_topic, String(pirstate1),true);
-    publishMessage(pirsensor2_topic, String(pirstate2),true);
-    publishMessage(pirsensor3_topic, String(pirstate3),true);
+      pirstate1 = digitalRead(pir1);   // check for motion
+      pirstate2 = digitalRead(pir2);   
+      pirstate3 = digitalRead(pir3);
+    
+      Serial.print("Hi");
+      Serial.println(pirstate1);
+      Serial.print("Hi");
+      Serial.println(pirstate2);
+      Serial.print("Hi");
+      Serial.println(pirstate3);
+        
+      if (pirstate1 == HIGH && pirstate2 == HIGH && pirstate3 == HIGH) {
+      Serial.println("Open door!");
+      digitalWrite(door, LOW);
+      publishMessage(pirsensor1_topic, String(pirstate1),true);
+      publishMessage(pirsensor2_topic, String(pirstate2),true);
+      publishMessage(pirsensor3_topic, String(pirstate3),true);
+      vTaskDelay(333);
+      }
+    }
+    else {
+      digitalWrite(door, HIGH);
+      
     }
   }
-  else {
-    digitalWrite(door, HIGH);
-    
-  }
+}
 
+void TaskHCIControl( void *pvParameters )
+{
+  (void) pvParameters;
+  
+/*
+  AnalogReadSerial
+  Reads an analog input on pin A3, prints the result to the serial monitor.
+  Graphical representation is available using serial plotter (Tools > Serial Plotter menu)
+  Attach the center pin of a potentiometer to pin A3, and the outside pins to +5V and ground.
+
+  This example code is in the public domain.
 */
+
+  for (;;)
+  {
+    // read the input on analog pin A6
+    if(doorstate == 0) {
+      digitalWrite(door,LOW);
+      vTaskDelay(333)
+    }
+    else{
+      digitalWrite(door,HIGH);
+    }
+  }
 }
 
 void setup_wifi() {
@@ -175,10 +217,10 @@ void callback(char* topic, byte* payload, unsigned int length){
   if(strcmp(topic,doormotortopic) == 0) {
     if(incomingMessage.equals("0")) {
       Serial.println(incomingMessage);
-      digitalWrite(door, LOW);
+      doorstate = 0;
     }
     else if(incomingMessage.equals("1")){
-      digitalWrite(door,HIGH);
+      doorstate = 1;
     }
     else{
     }
