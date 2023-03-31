@@ -141,7 +141,7 @@ void TaskSensorControl( void *pvParameters )  // This is a task.
         Serial.print("Distance 2:");
         Serial.println(distance2Cm);
 
-        if(distance1Cm < 80 && distance2Cm < 80) {
+        if(distance1Cm < 100 && distance2Cm < 100) {
 
           digitalWrite(door1us1trig, LOW);
           delayMicroseconds(2);
@@ -173,7 +173,7 @@ void TaskSensorControl( void *pvParameters )  // This is a task.
           Serial.print("Distance 2 Again:");
           Serial.println(distance2Cm);
           
-          if(distance1Cm < 50 && distance2Cm < 50) {
+          if(distance1Cm < 80 && distance2Cm < 80) {
             doorstatesensor = 0;
           }
           else {
@@ -186,7 +186,6 @@ void TaskSensorControl( void *pvParameters )  // This is a task.
 
       if(doorstatesensor == 0) {
           digitalWrite(door, LOW);
-          digitalWrite(lock, LOW);
           publishMessage(ultrasensor1_topic, String(distance1Cm),true);
           publishMessage(ultrasensor2_topic, String(distance2Cm),true);
           //open door
@@ -194,6 +193,7 @@ void TaskSensorControl( void *pvParameters )  // This is a task.
 
           //close door
           vTaskDelay(10000 / portTICK_PERIOD_MS);
+          digitalWrite(lock, LOW);
           doorstatesensor = 1;
       }
       else {
