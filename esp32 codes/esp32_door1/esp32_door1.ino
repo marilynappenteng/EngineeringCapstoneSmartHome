@@ -8,6 +8,10 @@
 #define ARDUINO_RUNNING_CORE 1
 #endif
 
+
+#define SOUND_SPEED 0.034
+#define CM_TO_INCH 0.393701
+
 const char* ssid = "Galaxy A3 Core7828";
 const char* password = "qfvy3253";
 
@@ -15,35 +19,43 @@ const char* password = "qfvy3253";
 //const char* mqtt_server = "192.168.1.144";
 const char* mqtt_server = "192.168.43.174";
 
-const int pir1 = 19; // GIOP19 pin connected to OUTPUT pin of pir sensor1
-const int pir2 = 22; // GIOP22 pin connected to OUTPUT pin of pir sensor2
-const int pir3 = 23; // GIOP23 pin connected to OUTPUT pin of pir sensor3
-int door = 18; //GPIO18 pin connected to IN2 for door relay
-bool pirstate1;
-bool pirstate2;
-bool pirstate3;
-bool doorstate = 1;
+const int door1us1trig = 18; // GIOP18 pin connected to TRIG pin of ultrasonic sensor 1
+const int door1us1echo = 19; // GIOP19 pin connected to ECHO pin of ultrasonic sensor 1
+const int door1us2trig = 2; // GIOP22 pin connected to TRIG pin of ultrasonic sensor 2
+const int door1us2echo = 4; // GIOP23 pin connected to ECHO pin of ultrasonic sensor 2
+int door = 22; //GPIO34 pin connected to IN2 for door relay
+int lock = 23; //GPIO35 pin connected to IN2 for door relay
+bool doorstatesensor = 1;
+int doorstatehci = 2;
+bool lockstate = 1;
+
+long duration1;
+float distance1Cm;
+long duration2;
+float distance2Cm;
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 long lastMsg = 0;
 char msg[50];
 
-const char* pirsensor1_topic = "smarthome/devices/door1pir1";
-const char* pirsensor2_topic = "smarthome/devices/door1pir2";
-const char* pirsensor3_topic = "smarthome/devices/door1pir3";
-const char* doormotortopic = "smarthome/devices/doormotor";
+const char* ultrasensor1_topic = "smarthome/devices/door1ultra1";
+const char* ultrasensor2_topic = "smarthome/devices/door1ultra2";
+const char* doortopic = "smarthome/devices/door";
 
 void TaskSensorControl( void *pvParameters );
 void TaskHCIControl( void *pvParameters );
+TaskHandle_t xSensorControl_Handle;
 
 void setup() {
   Serial.begin(115200);            // initialize serial
   setup_wifi();
-  pinMode(pir1, INPUT); // set ESP32 pin to input mode to read value from OUTPUT pin of sensor
-  pinMode(pir2, INPUT);
-  pinMode(pir3, INPUT);
+  pinMode(door1us1trig, OUTPUT); // set ESP32 pin to output mode to read value from OUTPUT pin of sensor
+  pinMode(door1us1echo, INPUT);
+  pinMode(door1us2trig, OUTPUT);
+  pinMode(door1us2echo, INPUT);
   pinMode(door, OUTPUT);
+  pinMode(lock, OUTPUT);
 
 //  #ifdef ESP8266
 //    espClient.setInsecure();
@@ -54,21 +66,24 @@ void setup() {
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
   digitalWrite(door, HIGH);
+  digitalWrite(lock, HIGH);
 
+  reconnect();
+  
     xTaskCreatePinnedToCore(
     TaskSensorControl
     ,  "Sensor Control"
-    ,  2048  // Stack size
+    ,  4096  // Stack size
     ,  NULL  // When no parameter is used, simply pass NULL
-    ,  2  // Priority
-    ,  NULL // With task handle we will be able to manipulate with this task.
+    ,  3  // Priority
+    ,  &xSensorControl_Handle // With task handle we will be able to manipulate with this task.
     ,  ARDUINO_RUNNING_CORE // Core on which the task will run
     );
 
       xTaskCreatePinnedToCore(
     TaskHCIControl
     ,  "HCI Control"
-    ,  2048  // Stack size
+    ,  4096  // Stack size
     ,  NULL  // When no parameter is used, simply pass NULL
     ,  1  // Priority
     ,  NULL // With task handle we will be able to manipulate with this task.
@@ -77,8 +92,8 @@ void setup() {
 }
 
 void loop() {
-  if(!client.connected()) reconnect();
-  client.loop();    
+      if(!client.connected()) reconnect();
+      client.loop();    
 }
 
 void TaskSensorControl( void *pvParameters )  // This is a task.
@@ -95,43 +110,101 @@ void TaskSensorControl( void *pvParameters )  // This is a task.
 */
 
   for (;;)
-  {
-     pirstate1 = digitalRead(pir1);   // check for motion
-     pirstate2 = digitalRead(pir2);   
-     pirstate3 = digitalRead(pir3);
-     if (pirstate1 == HIGH && pirstate2 == HIGH && pirstate3 == HIGH) {
-      Serial.println("Motion detected!");
-      Serial.println(pirstate1);
-      Serial.println(pirstate2);
-      Serial.println(pirstate3);
-      vTaskDelay(100);  // one tick delay (15ms) in between reads for stability
-      
-      pirstate1 = digitalRead(pir1);   // check for motion
-      pirstate2 = digitalRead(pir2);   
-      pirstate3 = digitalRead(pir3);
-    
-      Serial.print("Hi");
-      Serial.println(pirstate1);
-      Serial.print("Hi");
-      Serial.println(pirstate2);
-      Serial.print("Hi");
-      Serial.println(pirstate3);
+  {  
+        digitalWrite(door1us1trig, LOW);
+        delayMicroseconds(2);
+        // Sets the trigPin on HIGH state for 10 micro seconds
+        digitalWrite(door1us1trig, HIGH);
+        delayMicroseconds(10);
+        digitalWrite(door1us1trig, LOW);
         
-      if (pirstate1 == HIGH && pirstate2 == HIGH && pirstate3 == HIGH) {
-      Serial.println("Open door!");
-      digitalWrite(door, LOW);
-      publishMessage(pirsensor1_topic, String(pirstate1),true);
-      publishMessage(pirsensor2_topic, String(pirstate2),true);
-      publishMessage(pirsensor3_topic, String(pirstate3),true);
-      vTaskDelay(333);
+        // Reads the echoPin, returns the sound wave travel time in microseconds
+        duration1 = pulseIn(door1us1echo, HIGH);
+        
+
+
+        // Calculate the distance
+        distance1Cm = (duration1 * SOUND_SPEED)/2;
+        
+
+        digitalWrite(door1us2trig, LOW);
+        delayMicroseconds(2);
+        digitalWrite(door1us2trig, HIGH);
+        delayMicroseconds(10);
+        digitalWrite(door1us2trig, LOW);
+
+        duration2 = pulseIn(door1us2echo, HIGH);
+        distance2Cm = (duration2 * SOUND_SPEED)/2;
+
+        Serial.print("Distance 1:");
+        Serial.println(distance1Cm);
+        Serial.print("Distance 2:");
+        Serial.println(distance2Cm);
+
+        if(distance1Cm < 80 && distance2Cm < 80) {
+
+          digitalWrite(door1us1trig, LOW);
+          delayMicroseconds(2);
+          // Sets the trigPin on HIGH state for 10 micro seconds
+          digitalWrite(door1us1trig, HIGH);
+          delayMicroseconds(10);
+          digitalWrite(door1us1trig, LOW);
+          
+          // Reads the echoPin, returns the sound wave travel time in microseconds
+          duration1 = pulseIn(door1us1echo, HIGH);
+          
+  
+  
+          // Calculate the distance
+          distance1Cm = (duration1 * SOUND_SPEED)/2;
+          
+  
+          digitalWrite(door1us2trig, LOW);
+          delayMicroseconds(2);
+          digitalWrite(door1us2trig, HIGH);
+          delayMicroseconds(10);
+          digitalWrite(door1us2trig, LOW);
+  
+          duration2 = pulseIn(door1us2echo, HIGH);
+          distance2Cm = (duration2 * SOUND_SPEED)/2;
+  
+          Serial.print("Distance 1 Again:");
+          Serial.println(distance1Cm);
+          Serial.print("Distance 2 Again:");
+          Serial.println(distance2Cm);
+          
+          if(distance1Cm < 50 && distance2Cm < 50) {
+            doorstatesensor = 0;
+          }
+          else {
+            doorstatesensor = 1;
+          }  
+        }
+        else{
+          doorstatesensor = 1;
+        }
+
+      if(doorstatesensor == 0) {
+          digitalWrite(door, LOW);
+          digitalWrite(lock, LOW);
+          publishMessage(ultrasensor1_topic, String(distance1Cm),true);
+          publishMessage(ultrasensor2_topic, String(distance2Cm),true);
+          //open door
+          vTaskDelay(10000 / portTICK_PERIOD_MS);
+
+          //close door
+          vTaskDelay(10000 / portTICK_PERIOD_MS);
+          doorstatesensor = 1;
+      }
+      else {
+          digitalWrite(door, HIGH);
+          digitalWrite(lock, HIGH);
+      }
+
+
+        vTaskDelay(500/portTICK_PERIOD_MS);
       }
     }
-    else {
-      digitalWrite(door, HIGH);
-      
-    }
-  }
-}
 
 void TaskHCIControl( void *pvParameters )
 {
@@ -147,17 +220,35 @@ void TaskHCIControl( void *pvParameters )
 */
 
   for (;;)
-  {
+  { 
     // read the input on analog pin A6
-    if(doorstate == 0) {
+    if(doorstatehci == 0) {
+      digitalWrite(lock,LOW);
       digitalWrite(door,LOW);
-      vTaskDelay(333)
+      Serial.println("Motor on");
+      //open door
+      vTaskSuspend(xSensorControl_Handle);
+      vTaskDelay(10000 / portTICK_PERIOD_MS);
+      vTaskResume(xSensorControl_Handle);
+      doorstatehci = 2;
+      
+
     }
-    else{
-      digitalWrite(door,HIGH);
+    else if(doorstatehci == 1){
+      digitalWrite(lock,LOW);
+      digitalWrite(door,LOW);
+      Serial.println("Motor on");
+      vTaskSuspend(xSensorControl_Handle);
+      vTaskDelay(10000 / portTICK_PERIOD_MS);
+      vTaskResume(xSensorControl_Handle);
+      doorstatehci = 2;
+    }
+    else {
+      doorstatehci = 2;
     }
   }
 }
+
 
 void setup_wifi() {
   delay(10);
@@ -196,7 +287,7 @@ void reconnect() {
     Serial.println(clientID);
     if(client.connect(clientID.c_str())){
       Serial.println("Connected.");
-      client.subscribe(doormotortopic);
+      client.subscribe(doortopic);
     }
     else {
       Serial.print("failed,rc=");
@@ -213,16 +304,16 @@ void callback(char* topic, byte* payload, unsigned int length){
   for(int i=0; i< length; i++) {
     incomingMessage += (char)payload[i];
   }
-  Serial.print("Message arrived [" + String(topic) + "]" + incomingMessage);
-  if(strcmp(topic,doormotortopic) == 0) {
+  Serial.println("Message arrived [" + String(topic) + "]" + incomingMessage);
+  if(strcmp(topic,doortopic) == 0) {
     if(incomingMessage.equals("0")) {
-      Serial.println(incomingMessage);
-      doorstate = 0;
+      doorstatehci = 0;
     }
     else if(incomingMessage.equals("1")){
-      doorstate = 1;
+      doorstatehci = 1;
     }
     else{
+      doorstatehci = 2;
     }
   }
 }
