@@ -1,6 +1,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
+#include <ezButton.h>
 
 #if CONFIG_FREERTOS_UNICORE
 #define ARDUINO_RUNNING_CORE 0
@@ -28,6 +29,7 @@ int lock = 23; //GPIO35 pin connected to IN2 for door relay
 bool doorstatesensor = 1;
 int doorstatehci = 2;
 bool lockstate = 1;
+int state;
 
 long duration1;
 float distance1Cm;
@@ -38,6 +40,8 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 long lastMsg = 0;
 char msg[50];
+
+ezButton limitSwitch(17);  // create ezButton object that attach to ESP32 pin GPIO17
 
 const char* ultrasensor1_topic = "smarthome/devices/door1ultra1";
 const char* ultrasensor2_topic = "smarthome/devices/door1ultra2";
@@ -68,6 +72,9 @@ void setup() {
   digitalWrite(door, HIGH);
   digitalWrite(lock, HIGH);
 
+  limitSwitch.setDebounceTime(50); // set debounce time to 50 milliseconds
+
+  state = limitSwitch.getState();
   reconnect();
   
     xTaskCreatePinnedToCore(
@@ -83,17 +90,19 @@ void setup() {
       xTaskCreatePinnedToCore(
     TaskHCIControl
     ,  "HCI Control"
-    ,  4096  // Stack size
+    ,  8192  // Stack size
     ,  NULL  // When no parameter is used, simply pass NULL
     ,  1  // Priority
     ,  NULL // With task handle we will be able to manipulate with this task.
     ,  ARDUINO_RUNNING_CORE // Core on which the task will run
     );
+
 }
 
 void loop() {
       if(!client.connected()) reconnect();
       client.loop();    
+      checkLimitSwitch();
 }
 
 void TaskSensorControl( void *pvParameters )  // This is a task.
@@ -110,7 +119,7 @@ void TaskSensorControl( void *pvParameters )  // This is a task.
 */
 
   for (;;)
-  {  
+  {     limitSwitch.loop(); // MUST call the loop() function first
         digitalWrite(door1us1trig, LOW);
         delayMicroseconds(2);
         // Sets the trigPin on HIGH state for 10 micro seconds
@@ -135,11 +144,6 @@ void TaskSensorControl( void *pvParameters )  // This is a task.
 
         duration2 = pulseIn(door1us2echo, HIGH);
         distance2Cm = (duration2 * SOUND_SPEED)/2;
-
-        Serial.print("Distance 1:");
-        Serial.println(distance1Cm);
-        Serial.print("Distance 2:");
-        Serial.println(distance2Cm);
 
         if(distance1Cm < 100 && distance2Cm < 100) {
 
@@ -167,11 +171,7 @@ void TaskSensorControl( void *pvParameters )  // This is a task.
   
           duration2 = pulseIn(door1us2echo, HIGH);
           distance2Cm = (duration2 * SOUND_SPEED)/2;
-  
-          Serial.print("Distance 1 Again:");
-          Serial.println(distance1Cm);
-          Serial.print("Distance 2 Again:");
-          Serial.println(distance2Cm);
+ 
           
           if(distance1Cm < 80 && distance2Cm < 80) {
             doorstatesensor = 0;
@@ -183,22 +183,29 @@ void TaskSensorControl( void *pvParameters )  // This is a task.
         else{
           doorstatesensor = 1;
         }
+      state = limitSwitch.getState();
+      if(doorstatesensor == 0 && state == LOW) {
 
-      if(doorstatesensor == 0) {
-          digitalWrite(door, LOW);
           publishMessage(ultrasensor1_topic, String(distance1Cm),true);
           publishMessage(ultrasensor2_topic, String(distance2Cm),true);
           //open door
-          vTaskDelay(10000 / portTICK_PERIOD_MS);
+          digitalWrite(door, LOW);
+          digitalWrite(lock, LOW);          
+          vTaskDelay(10000/portTICK_PERIOD_MS); //opening door
+          //close door code (reverse direction)
+          state = limitSwitch.getState();
+          Serial.println(state);
+          while(state == HIGH) {
+            state = limitSwitch.getState();
+          }
+          //when it touches the frame
+          digitalWrite(door, HIGH);
+          digitalWrite(lock, HIGH);
 
-          //close door
-          vTaskDelay(10000 / portTICK_PERIOD_MS);
-          digitalWrite(lock, LOW);
           doorstatesensor = 1;
       }
       else {
           digitalWrite(door, HIGH);
-          digitalWrite(lock, HIGH);
       }
 
 
@@ -220,35 +227,56 @@ void TaskHCIControl( void *pvParameters )
 */
 
   for (;;)
-  { 
-    // read the input on analog pin A6
-    if(doorstatehci == 0) {
+  { limitSwitch.loop(); // MUST call the loop() function first
+     //open door
+    state == limitSwitch.getState();
+    if(doorstatehci == 0 && state == LOW) {
       digitalWrite(lock,LOW);
       digitalWrite(door,LOW);
       Serial.println("Motor on");
+      //changing direction code
+      
       //open door
       vTaskSuspend(xSensorControl_Handle);
       vTaskDelay(10000 / portTICK_PERIOD_MS);
       vTaskResume(xSensorControl_Handle);
       doorstatehci = 2;
+      digitalWrite(door,HIGH);
+      state == limitSwitch.getState();
       
 
     }
-    else if(doorstatehci == 1){
-      digitalWrite(lock,LOW);
+    //close door
+    if(doorstatehci == 1 && state == HIGH){
+      Serial.println("here");
       digitalWrite(door,LOW);
+      digitalWrite(lock,LOW);
       Serial.println("Motor on");
       vTaskSuspend(xSensorControl_Handle);
-      vTaskDelay(10000 / portTICK_PERIOD_MS);
-      vTaskResume(xSensorControl_Handle);
-      doorstatehci = 2;
+      //changing direction code
+
+      //when it touches the frame
+      if(state == LOW) {
+        digitalWrite(door, HIGH);
+        digitalWrite(lock, HIGH);
+        vTaskResume(xSensorControl_Handle);
+      }  
+      
     }
-    else {
-      doorstatehci = 2;
+    if(doorstatehci == 2) {
+      state = limitSwitch.getState();  
+      }
     }
-  }
 }
 
+
+void checkLimitSwitch(){
+  state = limitSwitch.getState();
+  while(state == HIGH) {
+    state = limitSwitch.getState();
+
+  }
+}
 
 void setup_wifi() {
   delay(10);
@@ -307,10 +335,13 @@ void callback(char* topic, byte* payload, unsigned int length){
   Serial.println("Message arrived [" + String(topic) + "]" + incomingMessage);
   if(strcmp(topic,doortopic) == 0) {
     if(incomingMessage.equals("0")) {
+      //open door
       doorstatehci = 0;
     }
     else if(incomingMessage.equals("1")){
+      //close door
       doorstatehci = 1;
+      Serial.println("Hiii");
     }
     else{
       doorstatehci = 2;
