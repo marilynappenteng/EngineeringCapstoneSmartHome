@@ -3,15 +3,22 @@
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include <HTTPClient.h>
+#include "DHT.h"
 
 #define USE_SERIAL Serial
 
+#define DHTPIN 32
+#define DHTTYPE DHT22
+DHT dht(DHTPIN, DHTTYPE);
+
 int led = 27;
-int state;
+int state = 1;
+
+float h;
 
 
-const char* ssid = "DUFIE-HOSTEL";
-const char* password = "Duf1e@9723";
+const char* ssid = "MiFi_1FBE89";
+const char* password = "12345678";
 WebServer server(80);
 
 
@@ -38,6 +45,10 @@ void stopAC() {
   state = 1;
 }
 
+void readHumidity() {
+  server.send(200, "text/plain", String(h));
+}
+
 void setup() {
   // put your setup code here, to run once:
   pinMode(led, OUTPUT);
@@ -62,6 +73,7 @@ void setup() {
 
   server.on("/StartAC", startAC);
   server.on("/StopAC", stopAC);
+  server.on("/readhumidity", readHumidity);
   server.onNotFound(handleNotFound);
 
   server.begin();
@@ -78,4 +90,7 @@ void loop() {
     digitalWrite(led, LOW);
   }
 
+  h = dht.readHumidity();
+  Serial.print(F("Humidity: "));
+  Serial.println(h);
 }

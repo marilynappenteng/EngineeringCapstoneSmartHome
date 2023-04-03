@@ -5,40 +5,25 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:smart_home_capstone_app/pages/home.dart';
-import 'package:smart_home_capstone_app/pages/register.dart';
+import 'package:smart_home_capstone_app/pages/login.dart';
 
-class Login extends StatefulWidget {
-  const Login({Key? key}) : super(key: key);
+class Register extends StatefulWidget {
+  const Register({Key? key}) : super(key: key);
 
   @override
-  State<Login> createState() => _LoginState();
+  State<Register> createState() => _RegisterState();
 }
 
-class _LoginState extends State<Login> {
+class _RegisterState extends State<Register> {
   TextEditingController username = TextEditingController();
   TextEditingController password = TextEditingController();
+  TextEditingController firstname = TextEditingController();
+  TextEditingController lastname = TextEditingController();
 
-  String name = "";
-  Future getDetails() async {
-    http.Response response1 = await http.get(Uri.parse(
-        "http://192.168.43.155/smarthome/name.php?email=${username.text}"));
-    name = response1.body;
-  }
-
-  Future login() async {
+  Future register() async {
     http.Response response = await http.get(Uri.parse(
-        "http://192.168.43.155/smarthome/login.php?email=${username.text}&password=${password.text}"));
-    getDetails();
-    if (response.body == "Success") {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-            builder: (context) => Home(
-                  username: username.text,
-                )),
-      );
-    } else {
-      // print('Login Unsuccessful');
+        "http://192.168.43.155/smarthome/register.php?email=${username.text}&password=${password.text}&first_name=${firstname.text}&last_name=${lastname.text}"));
+    if (response.body == "User Created Successfully") {
       await Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => Login()),
@@ -46,8 +31,8 @@ class _LoginState extends State<Login> {
     }
   }
 
-  void goRegister() {
-    Navigator.pushReplacementNamed(context, '/register');
+  void goLogin() {
+    Navigator.pushReplacementNamed(context, '/login');
   }
 
   @override
@@ -90,11 +75,11 @@ class _LoginState extends State<Login> {
                     ),
                   ),
                   Positioned(
-                    top: 150.0,
+                    top: 100.0,
                     left: 50.0,
                     right: 50.0,
                     child: Container(
-                      height: 400.0,
+                      height: 580.0,
                       width: 400.0,
                       decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(20),
@@ -125,6 +110,52 @@ class _LoginState extends State<Login> {
                           ),
                           const SizedBox(
                             height: 30,
+                          ),
+                          Padding(
+                            padding: EdgeInsets.only(left: 20),
+                            child: TextField(
+                              controller: firstname,
+                              decoration: const InputDecoration(
+                                labelText: 'First Name',
+                                labelStyle: TextStyle(
+                                  color: Color.fromRGBO(238, 238, 238, 1),
+                                  fontFamily: 'Quicksand',
+                                  fontSize: 15.0,
+                                ),
+                                // border: InputBorder.none,
+                                hintStyle: TextStyle(
+                                  color: Color.fromRGBO(238, 238, 238, 100),
+                                  fontFamily: 'Quicksand',
+                                  fontSize: 15.0,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(
+                            height: 30,
+                          ),
+                          Padding(
+                            padding: EdgeInsets.only(left: 20),
+                            child: TextField(
+                              controller: lastname,
+                              decoration: const InputDecoration(
+                                labelText: 'Last Name',
+                                labelStyle: TextStyle(
+                                  color: Color.fromRGBO(238, 238, 238, 1),
+                                  fontFamily: 'Quicksand',
+                                  fontSize: 15.0,
+                                ),
+                                // border: InputBorder.none,
+                                hintStyle: TextStyle(
+                                  color: Color.fromRGBO(238, 238, 238, 100),
+                                  fontFamily: 'Quicksand',
+                                  fontSize: 15.0,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(
+                            height: 50,
                           ),
                           Padding(
                             padding: EdgeInsets.only(left: 20),
@@ -173,7 +204,7 @@ class _LoginState extends State<Login> {
                             ),
                           ),
                           const SizedBox(
-                            height: 20,
+                            height: 10,
                           ),
                           Row(
                             // ignore: prefer_const_literals_to_create_immutables
@@ -189,10 +220,10 @@ class _LoginState extends State<Login> {
                               ),
                               TextButton(
                                 onPressed: () {
-                                  goRegister();
+                                  goLogin();
                                 },
                                 child: const Text(
-                                  'Sign Up',
+                                  'Sign In',
                                   style: TextStyle(
                                     color: Color.fromRGBO(247, 236, 89, 1),
                                     fontSize: 15,
@@ -221,10 +252,10 @@ class _LoginState extends State<Login> {
                               child: Center(
                                 child: TextButton(
                                   onPressed: () {
-                                    login();
+                                    register();
                                   },
                                   child: const Text(
-                                    'Sign In',
+                                    'Sign Up',
                                     style: TextStyle(
                                       color: Colors.black,
                                       fontWeight: FontWeight.bold,
