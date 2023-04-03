@@ -4,17 +4,15 @@ import urllib.error
 
 MQTT_SERVER = "192.168.43.174"
 
-MQTT_PATH1 = "smarthome/devices/voltage"
-MQTT_PATH2 = "smarthome/devices/current"
+MQTT_PATH1 = "smarthome/devices/door1ultra1"
+MQTT_PATH2 = "smarthome/devices/door1ultra2"
 
-housevoltage = 0 
-housecurrent = 0
-
+ultrasonic1 = 0
+ultrasonic2 = 0
 
 def on_connect(client, userdata, flags, rc): 
     client.subscribe(MQTT_PATH1)
     client.subscribe(MQTT_PATH2)
-
 
 
 def on_message(client, userdata, message): 
@@ -28,13 +26,12 @@ def on_message(client, userdata, message):
         message.payload=0
         
     if message.topic == MQTT_PATH1:
-        global housevoltage
-        housevoltage = str(message.payload.decode("utf-8"))
-   
-    if message.topic == MQTT_PATH2:
-        global housecurrent
-        housecurrent = str(message.payload.decode("utf-8"))
+        global ultrasonic1
+        ultrasonic1 = str(message.payload.decode("utf-8"))
 
+    if message.topic == MQTT_PATH2:
+        global ultrasonic2
+        ultrasonic2 = str(message.payload.decode("utf-8"))
 
     # if message.payload==b'ON':
     #     message.payload=1
@@ -42,7 +39,8 @@ def on_message(client, userdata, message):
     # if message.payload==b'OFF':
     #     message.payload=0
 
-    url = "http://192.168.43.174/mqtt-client-power.php?housevoltage="+str(housevoltage)+"&housecurrent="+str(housecurrent)
+    url = "http://192.168.43.174/mqtt-client-door.php?ultrasonic1="+str(ultrasonic1)+"&ultrasonic2="+str(ultrasonic2)
+
     contents = urllib.request.urlopen(url).read()
     print ((message.payload))
 

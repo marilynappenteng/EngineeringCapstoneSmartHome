@@ -3,18 +3,17 @@ import urllib.request
 import urllib.error
 
 MQTT_SERVER = "192.168.43.174"
+MQTT_TOPIC = "smarthome/+/+"
 
-MQTT_PATH1 = "smarthome/devices/voltage"
-MQTT_PATH2 = "smarthome/devices/current"
+MQTT_PATH1 = "smarthome/devices/ldr1"
+MQTT_PATH2 = "smarthome/devices/ldr2"
 
-housevoltage = 0 
-housecurrent = 0
-
+ldr1 = 0
+ldr2 = 0
 
 def on_connect(client, userdata, flags, rc): 
     client.subscribe(MQTT_PATH1)
     client.subscribe(MQTT_PATH2)
-
 
 
 def on_message(client, userdata, message): 
@@ -28,13 +27,12 @@ def on_message(client, userdata, message):
         message.payload=0
         
     if message.topic == MQTT_PATH1:
-        global housevoltage
-        housevoltage = str(message.payload.decode("utf-8"))
-   
+        global ldr1
+        ldr1 = str(message.payload.decode("utf-8"))
+        
     if message.topic == MQTT_PATH2:
-        global housecurrent
-        housecurrent = str(message.payload.decode("utf-8"))
-
+        global ldr2
+        ldr2 = str(message.payload.decode("utf-8"))
 
     # if message.payload==b'ON':
     #     message.payload=1
@@ -42,7 +40,7 @@ def on_message(client, userdata, message):
     # if message.payload==b'OFF':
     #     message.payload=0
 
-    url = "http://192.168.43.174/mqtt-client-power.php?housevoltage="+str(housevoltage)+"&housecurrent="+str(housecurrent)
+    url = "http://192.168.43.174/mqtt-client-ldr.php?ldr1="+str(ldr1)+"&ldr2="+str(ldr2)
     contents = urllib.request.urlopen(url).read()
     print ((message.payload))
 
@@ -61,3 +59,4 @@ client.connect(MQTT_SERVER, 1883, 60)
 # Other loop*() functions are available that give a threaded interface and a
 # manual interface.
 client.loop_forever()
+

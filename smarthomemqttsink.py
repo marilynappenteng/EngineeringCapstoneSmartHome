@@ -3,18 +3,18 @@ import urllib.request
 import urllib.error
 
 MQTT_SERVER = "192.168.43.174"
+MQTT_TOPIC = "smarthome/+/+"
 
-MQTT_PATH1 = "smarthome/devices/voltage"
-MQTT_PATH2 = "smarthome/devices/current"
+MQTT_PATH1 = "smarthome/devices/flowrate"
+MQTT_PATH2 = "smarthome/devices/distance"
 
-housevoltage = 0 
-housecurrent = 0
+kitchenflow = 0
+kitchendistance = 0
 
 
 def on_connect(client, userdata, flags, rc): 
     client.subscribe(MQTT_PATH1)
     client.subscribe(MQTT_PATH2)
-
 
 
 def on_message(client, userdata, message): 
@@ -26,15 +26,14 @@ def on_message(client, userdata, message):
 
     if message.payload==b'0':
         message.payload=0
-        
-    if message.topic == MQTT_PATH1:
-        global housevoltage
-        housevoltage = str(message.payload.decode("utf-8"))
-   
-    if message.topic == MQTT_PATH2:
-        global housecurrent
-        housecurrent = str(message.payload.decode("utf-8"))
 
+    if message.topic == MQTT_PATH1:
+        global kitchenflow
+        kitchenflow = str(message.payload.decode("utf-8"))
+        
+    if message.topic == MQTT_PATH2:
+        global kitchendistance
+        kitchendistance = str(message.payload.decode("utf-8"))
 
     # if message.payload==b'ON':
     #     message.payload=1
@@ -42,7 +41,8 @@ def on_message(client, userdata, message):
     # if message.payload==b'OFF':
     #     message.payload=0
 
-    url = "http://192.168.43.174/mqtt-client-power.php?housevoltage="+str(housevoltage)+"&housecurrent="+str(housecurrent)
+    url = "http://192.168.43.174/mqtt-client-sink.php?kitchenflow="+str(kitchenflow)+"&kitchendistance="+str(kitchendistance)
+
     contents = urllib.request.urlopen(url).read()
     print ((message.payload))
 
