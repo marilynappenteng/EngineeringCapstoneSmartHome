@@ -24,11 +24,13 @@ const int door1us1trig = 18; // GIOP18 pin connected to TRIG pin of ultrasonic s
 const int door1us1echo = 19; // GIOP19 pin connected to ECHO pin of ultrasonic sensor 1
 const int door1us2trig = 2; // GIOP22 pin connected to TRIG pin of ultrasonic sensor 2
 const int door1us2echo = 4; // GIOP23 pin connected to ECHO pin of ultrasonic sensor 2
-int door = 22; //GPIO34 pin connected to IN2 for door relay
+int doormotorin1 = 32; //GPIO34 pin connected to IN2 for door relay
+int doormotorin2 = 33; //GPIO34 pin connected to IN2 for door relay
 int lock = 23; //GPIO35 pin connected to IN2 for door relay
 bool doorstatesensor = 1;
 int doorstatehci = 2;
 bool lockstate = 1;
+int overstatus = 2;
 int state;
 
 long duration1;
@@ -46,6 +48,7 @@ ezButton limitSwitch(17);  // create ezButton object that attach to ESP32 pin GP
 const char* ultrasensor1_topic = "smarthome/devices/door1ultra1";
 const char* ultrasensor2_topic = "smarthome/devices/door1ultra2";
 const char* doortopic = "smarthome/devices/door";
+const char* overridetop = "smarthome/status/override";
 
 void TaskSensorControl( void *pvParameters );
 void TaskHCIControl( void *pvParameters );
@@ -58,7 +61,8 @@ void setup() {
   pinMode(door1us1echo, INPUT);
   pinMode(door1us2trig, OUTPUT);
   pinMode(door1us2echo, INPUT);
-  pinMode(door, OUTPUT);
+  pinMode(doormotorin1, OUTPUT);
+  pinMode(doormotorin2, OUTPUT);
   pinMode(lock, OUTPUT);
 
 //  #ifdef ESP8266
@@ -69,7 +73,8 @@ void setup() {
 //  
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
-  digitalWrite(door, HIGH);
+  digitalWrite(doormotorin1, LOW);
+  digitalWrite(doormotorin2, LOW);
   digitalWrite(lock, HIGH);
 
   limitSwitch.setDebounceTime(50); // set debounce time to 50 milliseconds
@@ -189,26 +194,29 @@ void TaskSensorControl( void *pvParameters )  // This is a task.
           publishMessage(ultrasensor1_topic, String(distance1Cm),true);
           publishMessage(ultrasensor2_topic, String(distance2Cm),true);
           //open door
-          digitalWrite(door, LOW);
+          digitalWrite(doormotorin1, LOW);
+          digitalWrite(doormotorin2, HIGH);
           digitalWrite(lock, LOW);          
           vTaskDelay(10000/portTICK_PERIOD_MS); //opening door
           //close door code (reverse direction)
+          digitalWrite(doormotorin1, HIGH);
+          digitalWrite(doormotorin2, LOW);
           state = limitSwitch.getState();
           Serial.println(state);
           while(state == HIGH) {
             state = limitSwitch.getState();
           }
           //when it touches the frame
-          digitalWrite(door, HIGH);
+          digitalWrite(doormotorin1, LOW);
+          digitalWrite(doormotorin2, LOW);
           digitalWrite(lock, HIGH);
-
           doorstatesensor = 1;
       }
       else {
-          digitalWrite(door, HIGH);
+          digitalWrite(doormotorin1, LOW);
+          digitalWrite(doormotorin2, LOW);
+          
       }
-
-
         vTaskDelay(500/portTICK_PERIOD_MS);
       }
     }
@@ -228,11 +236,21 @@ void TaskHCIControl( void *pvParameters )
 
   for (;;)
   { limitSwitch.loop(); // MUST call the loop() function first
+
+    if(overstatus == 0) {
+      vTaskSuspend(xSensorControl_Handle);
+    }
+    else if(overstatus == 1) {
+      vTaskResume(xSensorControl_Handle);
+    }
+    else {
+    }
      //open door
     state == limitSwitch.getState();
     if(doorstatehci == 0 && state == LOW) {
       digitalWrite(lock,LOW);
-      digitalWrite(door,LOW);
+      digitalWrite(doormotorin1, LOW);
+      digitalWrite(doormotorin2, HIGH);
       Serial.println("Motor on");
       //changing direction code
       
@@ -241,15 +259,17 @@ void TaskHCIControl( void *pvParameters )
       vTaskDelay(10000 / portTICK_PERIOD_MS);
       vTaskResume(xSensorControl_Handle);
       doorstatehci = 2;
-      digitalWrite(door,HIGH);
+      digitalWrite(doormotorin1, LOW);
+      digitalWrite(doormotorin2, LOW);
       state == limitSwitch.getState();
       
 
     }
     //close door
-    if(doorstatehci == 1 && state == HIGH){
+    else if(doorstatehci == 1 && state == HIGH){
       Serial.println("here");
-      digitalWrite(door,LOW);
+      digitalWrite(doormotorin1, HIGH);
+      digitalWrite(doormotorin2, LOW);
       digitalWrite(lock,LOW);
       Serial.println("Motor on");
       vTaskSuspend(xSensorControl_Handle);
@@ -257,14 +277,17 @@ void TaskHCIControl( void *pvParameters )
 
       //when it touches the frame
       if(state == LOW) {
-        digitalWrite(door, HIGH);
+        digitalWrite(doormotorin1, LOW);
+        digitalWrite(doormotorin2, LOW);
         digitalWrite(lock, HIGH);
         vTaskResume(xSensorControl_Handle);
       }  
       
     }
-    if(doorstatehci == 2) {
+    else{
       state = limitSwitch.getState();  
+      digitalWrite(doormotorin1, LOW);
+      digitalWrite(doormotorin2, LOW);
       }
     }
 }
@@ -346,5 +369,23 @@ void callback(char* topic, byte* payload, unsigned int length){
     else{
       doorstatehci = 2;
     }
+  }
+    //Override system
+  else if (strcmp(topic, overridetop) == 0) {
+    if (incomingMessage.equals("0")) {
+      //raise blinds
+      overstatus = 0;
+    }
+    else if (incomingMessage.equals("1")) {
+      //lower blinds
+      overstatus = 1;
+    }
+    else {
+      //do nothing
+      overstatus = 2;
+    }
+  }
+  else{
+    
   }
 }

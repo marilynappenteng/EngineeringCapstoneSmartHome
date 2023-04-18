@@ -15,11 +15,36 @@ const char* password = "qfvy3253";
 //const char* mqtt_server = "192.168.1.144";
 const char* mqtt_server = "192.168.43.174";
 
-const int ldrpin1 = 34; // GIOP34 pin connected to D0 pin of ldr sensor 1
-const int ldrpin2 = 35; // GIOP35 pin connected to D0 pin of ldr sensor 2
-int lightstate = 1; //automatically off
-int state1;
-int state2;
+const int voltpin = 34; // GIOP34 pin connected to OUT pin of voltage sensor
+const int currentpin = 35; // GIOP35 pin connected to OUT pin of current sensor
+int voltage;
+int current;
+
+const int currentpin = 35;
+
+
+//Current Variables
+int   sampling = 500;
+
+double mVperAmp = 66; // use 185 for 5A Module, 100 for 20A Module, and 66 for 30A Module
+
+double RawValue = 0;
+double V = 0;
+double Vactual = 0;
+
+
+//Voltage Variables
+float adc_voltage = 0.0;
+float in_voltage = 0.0;
+// Floats for resistor values in divider (in ohms)
+float R1 = 30000.0;
+float R2 = 7500.0;
+
+// Float for Reference Voltage
+float ref_voltage = 5;
+
+// Integer for ADC value
+int adc_value = 0;
 
 
 WiFiClient espClient;
@@ -28,27 +53,25 @@ long lastMsg = 0;
 char msg[50];
 
 
-const char* ldr1_topic = "smarthome/devices/ldr1";
-const char* ldr2_topic = "smarthome/devices/ldr2";
-const char* lightintensity = "smarthome/devices/lightintensity";
+const char* voltage_topic = "smarthome/devices/voltage";
+const char* current_topic = "smarthome/devices/current";
 
-void TaskReadLight( void *pvParameters );
+void TaskReadPower( void *pvParameters );
 
 void setup() {
   Serial.begin(115200);            // initialize serial
   setup_wifi();
-  pinMode(ldrpin1, INPUT);
-  pinMode(ldrpin2, INPUT);
 
 
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
 
+  analogReadResolution(12);
   reconnect();
 
   xTaskCreatePinnedToCore(
-    TaskReadLight
-    ,  "Read Light Intensity"
+    TaskReadPower
+    ,  "Read Power"
     ,  4096  // Stack size
     ,  NULL  // When no parameter is used, simply pass NULL
     ,  1  // Priority
@@ -62,7 +85,7 @@ void loop() {
   client.loop();
 }
 
-void TaskReadLight( void *pvParameters )  // This is a task.
+void TaskReadPower( void *pvParameters )  // This is a task.
 {
   (void) pvParameters;
 
@@ -77,16 +100,33 @@ void TaskReadLight( void *pvParameters )  // This is a task.
 
   for (;;)
   {
-    state1 = digitalRead(ldrpin1);
-    state2 = digitalRead(ldrpin2);
-    if (state1 == 1 && state2 == 1) {
-      lightstate = 0;
-      publishMessage(ldr1_topic, String(state1), true);
-      publishMessage(ldr2_topic, String(state2), true);
-      publishMessage(lightintensity, String(lightstate), true);
+    for (int i = 0; i < sampling; i++)
+    {
+      RawValue += analogRead(currentpin);
+      delay(1);
     }
-    lightstate = 1;
-    vTaskDelay(60000 / portTICK_PERIOD_MS); //checking light intensity every minute
+
+    RawValue = RawValue / sampling;
+    V = (RawValue / 4095.0) * 3300; // Gets you mV
+    Vactual = 5.5 * V;
+    current = (Vactual / mVperAmp);
+
+
+    adc_value = analogRead(ANALOG_IN_PIN);
+
+    // Determine voltage at ADC input
+    adc_voltage  = (adc_value * ref_voltage) / 4095.0;
+
+    // Calculate voltage at divider input
+    voltage = (0.0039) * adc_value - 0.2;
+
+    // Print results to Serial Monitor to 2 decimal places
+    Serial.print("Input Voltage = ");
+    Serial.println(voltage, 2);
+
+    publishMessage(voltage_topic, String(voltage), true);
+    publishMessage(current_topic, String(current), true);
+    vTaskDelay(1000 / portTICK_PERIOD_MS); //checking light intensity every minute
   }
 }
 
@@ -123,7 +163,7 @@ void publishMessage(const char* topic, String payload, boolean retained) {
 void reconnect() {
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
-    String clientID = "ESP32LDRClient-";
+    String clientID = "ESP32PowerClient-";
     clientID += String(random(0xffff), HEX);
     Serial.println(clientID);
     if (client.connect(clientID.c_str())) {
