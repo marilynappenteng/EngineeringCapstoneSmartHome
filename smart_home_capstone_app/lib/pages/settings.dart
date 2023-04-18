@@ -69,8 +69,7 @@ class _SettingsState extends State<Settings> {
               // ignore: prefer_const_constructors
               decoration: BoxDecoration(
                 image: const DecorationImage(
-                    image: NetworkImage(
-                        'https://oflutter.com/wp-content/uploads/2021/02/profile-bg3.jpg'),
+                    image: AssetImage('assets/profile-bg3.jpg'),
                     fit: BoxFit.cover),
               ),
             ),

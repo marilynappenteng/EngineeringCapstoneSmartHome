@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/src/foundation/key.dart';
-import 'package:flutter/src/widgets/framework.dart';
+import 'dart:async';
+import 'package:http/http.dart' as http;
+import 'package:mqtt_client/mqtt_client.dart';
+import 'package:mqtt_client/mqtt_server_client.dart';
 
 class Home extends StatefulWidget {
-  const Home({Key? key}) : super(key: key);
+  var username;
+  Home({Key? key, this.username}) : super(key: key);
 
   @override
   State<Home> createState() => _HomeState();
@@ -11,6 +14,89 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  // MQTT
+  late MqttClient client;
+  String status = '';
+  Map<String, String> message = {};
+
+  void connect() async {
+    client = MqttServerClient('192.168.43.174', 'Gerald');
+    client.keepAlivePeriod = 60;
+    client.onConnected = () {
+      setState(() {
+        status = 'Connected';
+      });
+    };
+    client.onDisconnected = () {
+      setState(() {
+        status = 'Disconnected';
+      });
+    };
+    client.connect();
+  }
+
+  void publish(String topic, String message) {
+    final builder = MqttClientPayloadBuilder();
+    builder.addString(message);
+    client.publishMessage(topic, MqttQos.atMostOnce, builder.payload!);
+  }
+
+  void subscribe(String topic) {
+    client.subscribe(topic, MqttQos.atLeastOnce);
+
+    client.updates?.listen((List<MqttReceivedMessage<MqttMessage>> messages) {
+      messages.forEach((MqttReceivedMessage<MqttMessage> message) {
+        final MqttPublishMessage receivedMessage =
+            message.payload as MqttPublishMessage;
+        final String topic = message.topic;
+        final String messageText = MqttPublishPayload.bytesToStringAsString(
+            receivedMessage.payload.message);
+        setState(() {
+          this.message[topic] = messageText;
+        });
+      });
+    });
+  }
+
+  void disconnect() {
+    client.disconnect();
+  }
+
+  String humidity = "";
+  Future readHumidity() async {
+    http.Response response =
+        await http.get(Uri.parse("http://192.168.0.103/readhumidity"));
+    humidity = response.body;
+    // debugPrint(humidity);
+  }
+
+  String accName = "";
+  Future getFirstName() async {
+    http.Response response = await http.get(Uri.parse(
+        "http://192.168.43.155/smarthome/name.php?email=${widget.username}"));
+    accName = response.body;
+  }
+
+  String accEmail = "";
+  Future getEmail() async {
+    http.Response response = await http.get(Uri.parse(
+        "http://192.168.43.155/smarthome/email.php?email=${widget.username}"));
+    accEmail = response.body;
+  }
+
+  @override
+  void initState() {
+    getFirstName();
+    getEmail();
+    connect();
+    Timer mytimer = Timer.periodic(Duration(seconds: 5), (timer) {
+      subscribe('smarthome/devices/ldr1');
+      setState(() {});
+      //mytimer.cancel() //to terminate this timer
+    });
+    super.initState();
+  }
 
   void goHome() {
     Navigator.pushReplacementNamed(context, '/home');
@@ -46,14 +132,14 @@ class _HomeState extends State<Home> {
           // ignore: prefer_const_literals_to_create_immutables
           children: [
             UserAccountsDrawerHeader(
-              accountName: const Text(
-                'Gerald Akita',
+              accountName: Text(
+                accName,
                 style: TextStyle(
                   fontFamily: 'Quicksand',
                 ),
               ),
-              accountEmail: const Text(
-                'gerald_akita@yahoo.com',
+              accountEmail: Text(
+                accEmail,
                 style: TextStyle(
                   fontFamily: 'Quicksand',
                 ),
@@ -71,8 +157,7 @@ class _HomeState extends State<Home> {
               // ignore: prefer_const_constructors
               decoration: BoxDecoration(
                 image: const DecorationImage(
-                    image: NetworkImage(
-                        'https://oflutter.com/wp-content/uploads/2021/02/profile-bg3.jpg'),
+                    image: AssetImage('assets/profile-bg3.jpg'),
                     fit: BoxFit.cover),
               ),
             ),
@@ -304,8 +389,8 @@ class _HomeState extends State<Home> {
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
                             // ignore: prefer_const_literals_to_create_immutables
                             children: [
-                              const Text(
-                                '50kWh',
+                              Text(
+                                message['smarthome/devices/ldr1'] ?? '',
                                 textAlign: TextAlign.start,
                                 style: TextStyle(
                                   color: Colors.black,
