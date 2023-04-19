@@ -8,6 +8,8 @@
 #define ARDUINO_RUNNING_CORE 1
 #endif
 
+#define SOUND_SPEED 0.034
+#define CM_TO_INCH 0.393701
 
 const char* ssid = "Galaxy A3 Core7828";
 const char* password = "qfvy3253";
@@ -18,11 +20,11 @@ const char* mqtt_server = "192.168.43.174";
 
 const int trig = 22; // GIOP18 pin connected to IN1 pin of L298N motor driver
 const int echo = 23; // GIOP19 pin connected to IN2 pin of L298N motor driver
-const int flow = 34; // GIOP22 pin connected to TRIG pin of ultrasonic sensor 2
-const int valve = 35; // GIOP22 pin connected to TRIG pin of ultrasonic sensor 2
+//const int flow = 34; // GIOP22 pin connected to TRIG pin of ultrasonic sensor 2
+const int valve = 33; // GIOP22 pin connected to TRIG pin of ultrasonic sensor 2
 int tapstatehci = 2;
 int overstatus = 2;
-int waterflow;
+//int waterflow;
 float distance, duration;
 
 WiFiClient espClient;
@@ -31,7 +33,7 @@ long lastMsg = 0;
 char msg[50];
 
 
-const char* flowrate_topic = "smarthome/devices/flowrate";
+//const char* flowrate_topic = "smarthome/devices/flowrate";
 const char* tap_topic = "smarthome/devices/tap";
 const char* overridetop = "smarthome/status/override";
 
@@ -44,7 +46,7 @@ void setup() {
   setup_wifi();
   pinMode(trig, OUTPUT); // set ESP32 pin to output mode to read value from OUTPUT pin of sensor
   pinMode(echo, INPUT);
-  pinMode(flow, INPUT);
+  //  pinMode(flow, INPUT);
   pinMode(valve, OUTPUT);
 
   //  #ifdef ESP8266
@@ -73,7 +75,7 @@ void setup() {
     TaskHCIControl
     ,  "HCI Control"
     ,  8192  // Stack size
-    ,  NULL  // When no parameter is used, simply pass NULL
+    ,   NULL  // When no parameter is used, simply pass NULL
     ,  1  // Priority
     ,  NULL // With task handle we will be able to manipulate with this task.
     ,  ARDUINO_RUNNING_CORE // Core on which the task will run
@@ -91,31 +93,35 @@ void TaskSensorControl( void *pvParameters )  // This is a task.
   (void) pvParameters;
   for (;;)
   {
-        digitalWrite(trig, LOW);
-        delayMicroseconds(2);
-        // Sets the trigPin on HIGH state for 10 micro seconds
-        digitalWrite(trig, HIGH);
-        delayMicroseconds(10);
-        digitalWrite(trig, LOW);
-        
-        // Reads the echoPin, returns the sound wave travel time in microseconds
-        duration = pulseIn(echo, HIGH);
-        
+    digitalWrite(trig, LOW);
+    delayMicroseconds(2);
+    // Sets the trigPin on HIGH state for 10 micro seconds
+    digitalWrite(trig, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trig, LOW);
+
+    // Reads the echoPin, returns the sound wave travel time in microseconds
+    duration = pulseIn(echo, HIGH);
 
 
-        // Calculate the distance
-        distance = (duration * SOUND_SPEED)/2;
-        
 
-    if (distance <= 20 && flow == 0) {
-      digitalWrite(valve, LOW); //open tap
+    // Calculate the distance
+    distance = (duration * SOUND_SPEED) / 2;
+    Serial.println(distance);
+
+    if (tapstatehci == 2) {
+      if (distance <= 20) {
+        digitalWrite(valve, LOW); //open tap
+      }
+      else if (distance > 20) {
+        digitalWrite(valve, HIGH); //close tap
+      }
+      else {
+      }
+
+
     }
-    
-    else if (distance > 20 && flow > 0) {
-      digitalWrite(valve, HIGH); //close tap
-    }
-    else {
-    }
+
     vTaskDelay(500 / portTICK_PERIOD_MS);
   }
 }
@@ -124,45 +130,32 @@ void TaskHCIControl( void *pvParameters )
 {
   (void) pvParameters;
   for (;;)
-  {if(overstatus == 0) {
+  {
+    if (overstatus == 0) {
       vTaskSuspend(xSensorControl_Handle);
     }
-    else if(overstatus == 1) {
+    else if (overstatus == 1) {
       vTaskResume(xSensorControl_Handle);
     }
     else {
     }
+    //    Serial.println("Tap Command");
+    //    Serial.println(tapstatehci);
 
     if (tapstatehci == 0) {
       vTaskSuspend(xSensorControl_Handle);
       digitalWrite(valve, LOW); //open tap
+      if (tapstatehci == 1) {
+      digitalWrite(valve, HIGH); //close tap
       tapstatehci = 2;
       vTaskResume(xSensorControl_Handle);
+      }
     }
     else if (tapstatehci == 1) {
-      vTaskSuspend(xSensorControl_Handle);
-      digitalWrite(valve, HIGH); //open tap
-      tapstatehci = 2;
-      vTaskResume(xSensorControl_Handle);
-    }
-    else {
+      digitalWrite(valve, HIGH); //close tap
       tapstatehci = 2;
     }
-
-    if (lightstatehci == 0 ) {
-      vTaskSuspend(xSensorControl_Handle);
-      digitalWrite(lightbulb, LOW); //turn on light bulb
-      vTaskResume(xSensorControl_Handle);
-      lightstatehci = 2;
-    }
-    else if (lightstatehci == 1) {
-      vTaskSuspend(xSensorControl_Handle);
-      digitalWrite(lightbulb, HIGH); //turn off light bulb
-      vTaskResume(xSensorControl_Handle);
-      lightstatehci = 2;
-    }
     else {
-      lightstatehci = 2;
     }
   }
 }
@@ -240,7 +233,7 @@ void callback(char* topic, byte * payload, unsigned int length) {
       tapstatehci = 2;
     }
   }
-    //Override system
+  //Override system
   else if (strcmp(topic, overridetop) == 0) {
     if (incomingMessage.equals("0")) {
       //activate override
