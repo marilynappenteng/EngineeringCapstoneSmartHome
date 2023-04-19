@@ -18,8 +18,8 @@ const char* mqtt_server = "192.168.43.174";
 const int ldrpin1 = 34; // GIOP34 pin connected to D0 pin of ldr sensor 1
 const int ldrpin2 = 35; // GIOP35 pin connected to D0 pin of ldr sensor 2
 int lightstate = 1; //automatically off
-int state1;
-int state2;
+bool state1;
+bool state2;
 
 
 WiFiClient espClient;
@@ -37,12 +37,10 @@ void TaskReadLight( void *pvParameters );
 void setup() {
   Serial.begin(115200);            // initialize serial
   setup_wifi();
-  pinMode(ldrpin1, INPUT);
-  pinMode(ldrpin2, INPUT);
-
-
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
+  pinMode(ldrpin1, INPUT);
+  pinMode(ldrpin2, INPUT);
 
   reconnect();
 
@@ -79,6 +77,11 @@ void TaskReadLight( void *pvParameters )  // This is a task.
   {
     state1 = digitalRead(ldrpin1);
     state2 = digitalRead(ldrpin2);
+    Serial.println(state1);
+    Serial.println(state2);
+
+    
+    Serial.println("----------------");
     if (state1 == 1 && state2 == 1) {
       lightstate = 0;
       publishMessage(ldr1_topic, String(state1), true);
@@ -86,7 +89,7 @@ void TaskReadLight( void *pvParameters )  // This is a task.
       publishMessage(lightintensity, String(lightstate), true);
     }
     lightstate = 1;
-    vTaskDelay(60000 / portTICK_PERIOD_MS); //checking light intensity every minute
+    vTaskDelay(1000 / portTICK_PERIOD_MS); //checking light intensity every minute
   }
 }
 

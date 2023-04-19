@@ -309,7 +309,7 @@ void TaskHCIControl( void *pvParameters )
       } //opening door
       vTaskResume(xSensorControl_Handle);
       doorstatehci = 2;
-      state == limitSwitch.getState();
+      state = limitSwitch.getState();
 
 
     }

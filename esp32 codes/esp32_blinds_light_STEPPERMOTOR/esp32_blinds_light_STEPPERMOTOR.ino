@@ -94,31 +94,45 @@ void setup() {
 void loop() {
   if (!client.connected()) reconnect();
   client.loop();
-  checkLimitSwitch();
+  state = limitSwitch.getState();;
 }
 
 void TaskSensorControl( void *pvParameters )  // This is a task.
 {
   (void) pvParameters;
   for (;;)
-  { limitSwitch.loop(); // MUST call the loop() function first
+  { 
+    limitSwitch.loop(); // MUST call the loop() function first
+    Serial.println("Blind State Sensor: ");
+    Serial.println(blindstatesensor);
+
+    Serial.println("Light State Sensor: ");
+    Serial.println(lightstatesensor);
+
+    Serial.println(state);
     state = limitSwitch.getState();
+
+    
     if (blindstatesensor == 0 && lightstatesensor == 0 && state == HIGH) {
       digitalWrite(lightbulb, LOW); //turn on light bulb
 
       state = limitSwitch.getState();
       Serial.println(state);
       while (state == HIGH) {   //checking if frame has been touched
-        state = limitSwitch.getState();
+        Serial.println("clockwise");
         motor.step(steps_per_rev);
+        vTaskDelay(60 / portTICK_PERIOD_MS);
+
       }
       blindstatesensor = 2;
       lightstatesensor = 2;
     }
+
+    
     else if (blindstatesensor == 1 && lightstatesensor == 1 && state == LOW) {
       digitalWrite(lightbulb, HIGH); //turn off light bulb
       int i = 0;
-      while(i < 100) {
+      while(i < 10) {
         motor.step(-steps_per_rev);
         i++;
       }
@@ -126,8 +140,13 @@ void TaskSensorControl( void *pvParameters )  // This is a task.
       blindstatesensor = 2;
       lightstatesensor = 2;
     }
+
+    
     else {
+      blindstatesensor = 2;
+      lightstatesensor = 2;
     }
+    
     vTaskDelay(500 / portTICK_PERIOD_MS);
   }
 }
@@ -137,7 +156,20 @@ void TaskHCIControl( void *pvParameters )
   (void) pvParameters;
   for (;;)
   { limitSwitch.loop(); // MUST call the loop() function first
+  state = limitSwitch.getState();
 
+
+      Serial.println("Blind State Sensor: ");
+    Serial.println(blindstatehci);
+
+    Serial.println("Light State Sensor: ");
+    Serial.println(lightstatehci);
+
+    Serial.println(state);
+    state = limitSwitch.getState();
+
+
+    
     if(overstatus == 0) {
       vTaskSuspend(xSensorControl_Handle);
     }
@@ -147,57 +179,56 @@ void TaskHCIControl( void *pvParameters )
     else {
     }
   
-    //open door
+    //lower blinds
     state == limitSwitch.getState();
     if (blindstatehci == 0 && state == HIGH) {
       vTaskSuspend(xSensorControl_Handle);
 
       state = limitSwitch.getState();
-      Serial.println(state);
       while (state == HIGH) {
-        state = limitSwitch.getState();
+        Serial.println("clockwise");
         motor.step(steps_per_rev);
+        vTaskDelay(100/portTICK_PERIOD_MS);
+        limitSwitch.loop();
+        state = limitSwitch.getState();
+        Serial.println(state);
       }
+      
       blindstatehci = 2;
       vTaskResume(xSensorControl_Handle);
     }
-    //close door
+    //raise blinds
     else if (blindstatehci == 1 && state == LOW) {
       vTaskSuspend(xSensorControl_Handle);
-      while(i < 100) {
+      int i = 0;
+      while (i < 10) {
+        Serial.println("anticlockwise");
         motor.step(-steps_per_rev);
+        i++;
       }
-      blindstatehci = 2;
       vTaskResume(xSensorControl_Handle);
+      blindstatehci = 2;
+      state = limitSwitch.getState();
     }
     else {
-      state = limitSwitch.getState();
     }
 
     if (lightstatehci == 0 ) {
       vTaskSuspend(xSensorControl_Handle);
       digitalWrite(lightbulb, LOW); //turn on light bulb
-      vTaskResume(xSensorControl_Handle);
-      lightstatehci = 2;
+      if (lightstatehci == 1) {
+        digitalWrite(lightbulb, HIGH); //close tap
+        lightstatehci = 2;
+        vTaskResume(xSensorControl_Handle);
+      }
     }
     else if (lightstatehci == 1) {
-      vTaskSuspend(xSensorControl_Handle);
-      digitalWrite(lightbulb, HIGH); //turn off light bulb
-      vTaskResume(xSensorControl_Handle);
+      digitalWrite(lightbulb, HIGH); //close tap
       lightstatehci = 2;
     }
     else {
       state = limitSwitch.getState();
     }
-  }
-}
-
-
-void checkLimitSwitch() {
-  state = limitSwitch.getState();
-  while (state == HIGH) { //not pressed
-    state = limitSwitch.getState();
-
   }
 }
 
@@ -241,6 +272,7 @@ void reconnect() {
       client.subscribe(lightintensity);
       client.subscribe(lightbulb_topic);
       client.subscribe(blinds_topic);
+      client.subscribe(overridetop);
     }
     else {
       Serial.print("failed,rc=");
@@ -293,14 +325,15 @@ void callback(char* topic, byte * payload, unsigned int length) {
   //Sensor Control
   else if (strcmp(topic, lightintensity) == 0) {
     if (incomingMessage.equals("0")) {
-      //lower blinds and turn on light
-      blindstatesensor = 0;
-      lightstatesensor = 0;
-    }
-    else if (incomingMessage.equals("1")) {
       //raise blinds and turn off light
       blindstatesensor = 1;
       lightstatesensor = 1;
+
+    }
+    else if (incomingMessage.equals("1")) {
+      //lower blinds and turn on light
+      blindstatesensor = 0;
+      lightstatesensor = 0;
     }
     else {
       //do nothing
