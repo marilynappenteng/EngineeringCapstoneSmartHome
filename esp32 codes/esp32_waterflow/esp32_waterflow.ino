@@ -36,6 +36,7 @@ char msg[50];
 //const char* flowrate_topic = "smarthome/devices/flowrate";
 const char* tap_topic = "smarthome/devices/tap";
 const char* overridetop = "smarthome/status/override";
+const char* ultrasonic_topic = "smarthome/devices/distance";
 
 void TaskSensorControl( void *pvParameters );
 void TaskHCIControl( void *pvParameters );
@@ -112,6 +113,7 @@ void TaskSensorControl( void *pvParameters )  // This is a task.
     if (tapstatehci == 2) {
       if (distance <= 20) {
         digitalWrite(valve, LOW); //open tap
+        publishMessage(ultrasonic_topic, String(distance), true);
       }
       else if (distance > 20) {
         digitalWrite(valve, HIGH); //close tap
@@ -146,9 +148,9 @@ void TaskHCIControl( void *pvParameters )
       vTaskSuspend(xSensorControl_Handle);
       digitalWrite(valve, LOW); //open tap
       if (tapstatehci == 1) {
-      digitalWrite(valve, HIGH); //close tap
-      tapstatehci = 2;
-      vTaskResume(xSensorControl_Handle);
+        digitalWrite(valve, HIGH); //close tap
+        tapstatehci = 2;
+        vTaskResume(xSensorControl_Handle);
       }
     }
     else if (tapstatehci == 1) {

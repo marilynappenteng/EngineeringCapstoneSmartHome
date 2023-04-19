@@ -17,10 +17,9 @@ const char* mqtt_server = "192.168.43.174";
 
 const int voltpin = 34; // GIOP34 pin connected to OUT pin of voltage sensor
 const int currentpin = 35; // GIOP35 pin connected to OUT pin of current sensor
-int voltage;
-int current;
+float voltage;
+float current;
 
-const int currentpin = 35;
 
 
 //Current Variables
@@ -112,7 +111,7 @@ void TaskReadPower( void *pvParameters )  // This is a task.
     current = (Vactual / mVperAmp);
 
 
-    adc_value = analogRead(ANALOG_IN_PIN);
+    adc_value = analogRead(voltpin);
 
     // Determine voltage at ADC input
     adc_voltage  = (adc_value * ref_voltage) / 4095.0;
@@ -122,11 +121,11 @@ void TaskReadPower( void *pvParameters )  // This is a task.
 
     // Print results to Serial Monitor to 2 decimal places
     Serial.print("Input Voltage = ");
-    Serial.println(voltage, 2);
+    Serial.println(voltage);
 
     publishMessage(voltage_topic, String(voltage), true);
     publishMessage(current_topic, String(current), true);
-    vTaskDelay(1000 / portTICK_PERIOD_MS); //checking light intensity every minute
+    vTaskDelay(20000 / portTICK_PERIOD_MS); //checking light intensity every minute
   }
 }
 
