@@ -7,8 +7,8 @@ MQTT_SERVER = "192.168.43.174"
 MQTT_PATH1 = "smarthome/devices/voltage"
 MQTT_PATH2 = "smarthome/devices/current"
 
-housevoltage = 0 
-housecurrent = 0
+housevoltage = 0.0 
+housecurrent = 0.0
 
 
 def on_connect(client, userdata, flags, rc): 
