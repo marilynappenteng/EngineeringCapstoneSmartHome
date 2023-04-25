@@ -15,11 +15,19 @@ const char* password = "qfvy3253";
 //const char* mqtt_server = "192.168.1.144";
 const char* mqtt_server = "192.168.43.174";
 
+#define ADC_REF_VOLTAGE 3.3
+#define MAX_ADC_READING 4095
+#define REF_RESISTANCE 20000
+
+
+
 const int ldrpin1 = 34; // GIOP34 pin connected to D0 pin of ldr sensor 1
 const int ldrpin2 = 35; // GIOP35 pin connected to D0 pin of ldr sensor 2
 int lightstate = 1; //automatically off
-bool state1;
-bool state2;
+float state1;
+float state2;
+float resistorVoltage1, resistorVoltage2, ldrVoltage1, ldrVoltage2, ldrResistance1, ldrResistance2;
+
 
 
 WiFiClient espClient;
@@ -39,8 +47,8 @@ void setup() {
   setup_wifi();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
-  pinMode(ldrpin1, INPUT);
-  pinMode(ldrpin2, INPUT);
+  //  pinMode(ldrpin1, INPUT);
+  //  pinMode(ldrpin2, INPUT);
 
   reconnect();
 
@@ -75,20 +83,33 @@ void TaskReadLight( void *pvParameters )  // This is a task.
 
   for (;;)
   {
-    state1 = digitalRead(ldrpin1);
-    state2 = digitalRead(ldrpin2);
-    Serial.println(state1);
-    Serial.println(state2);
+    state1 = analogRead(ldrpin1);
+    state2 = analogRead(ldrpin2);
 
-    
+    // MAX_ADC_READING is 4095 and ADC_REF_VOLTAGE is 3.3
+    ldrVoltage1 = (float)state1 / MAX_ADC_READING * ADC_REF_VOLTAGE;
+    ldrVoltage2 = (float)state2 / MAX_ADC_READING * ADC_REF_VOLTAGE;
+
+
+    resistorVoltage1 = ADC_REF_VOLTAGE - ldrVoltage1;
+    resistorVoltage2 = ADC_REF_VOLTAGE - ldrVoltage2;
+
+    ldrResistance1 = ldrVoltage1 / resistorVoltage1 * REF_RESISTANCE; // REF_RESISTANCE is 20 kohm
+    ldrResistance2 = ldrVoltage2 / resistorVoltage2 * REF_RESISTANCE; // REF_RESISTANCE is 20 kohm
+
+    Serial.println(ldrResistance1);
+    Serial.println(ldrResistance2);
+
+
     Serial.println("----------------");
-    if (state1 == 1 && state2 == 1) {
+    if (ldrResistance1 > 10000 && ldrResistance2 > 10000) {
       lightstate = 0;
-      publishMessage(ldr1_topic, String(state1), true);
-      publishMessage(ldr2_topic, String(state2), true);
       publishMessage(lightintensity, String(lightstate), true);
     }
     lightstate = 1;
+
+    publishMessage(ldr1_topic, String(ldrResistance1), true);
+    publishMessage(ldr2_topic, String(ldrResistance2), true);
     vTaskDelay(1000 / portTICK_PERIOD_MS); //checking light intensity every minute
   }
 }
