@@ -1,5 +1,5 @@
 #include <WiFi.h>
-#include <WiFiClientSecure.h>
+//#include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 
 #if CONFIG_FREERTOS_UNICORE
