@@ -21,7 +21,7 @@ const char* mqtt_server = "192.168.43.174";
 const int trig = 22; // GIOP18 pin connected to IN1 pin of L298N motor driver
 const int echo = 23; // GIOP19 pin connected to IN2 pin of L298N motor driver
 //const int flow = 34; // GIOP22 pin connected to TRIG pin of ultrasonic sensor 2
-const int valve = 33; // GIOP22 pin connected to TRIG pin of ultrasonic sensor 2
+const int valve = 25; // GIOP22 pin connected to TRIG pin of ultrasonic sensor 2
 int tapstatehci = 2;
 int overstatus = 2;
 //int waterflow;
