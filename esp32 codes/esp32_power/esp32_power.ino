@@ -112,7 +112,7 @@ void TaskReadPower( void *pvParameters )  // This is a task.
 
 
     adc_value = analogRead(voltpin);
-
+    Serial.println(adc_value);
     // Determine voltage at ADC input
     adc_voltage  = (adc_value * ref_voltage) / 4095.0;
 
@@ -125,7 +125,7 @@ void TaskReadPower( void *pvParameters )  // This is a task.
 
     publishMessage(voltage_topic, String(voltage), true);
     publishMessage(current_topic, String(current), true);
-    vTaskDelay(20000 / portTICK_PERIOD_MS); //checking light intensity every minute
+    vTaskDelay(5000 / portTICK_PERIOD_MS); //checking light intensity every minute
   }
 }
 
